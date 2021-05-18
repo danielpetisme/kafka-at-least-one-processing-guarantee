@@ -6,6 +6,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -32,10 +33,14 @@ public class SimpleConsumer {
         simpleConsumer.start();
     }
 
-    public SimpleConsumer() throws ExecutionException, InterruptedException {
+    public SimpleConsumer() throws ExecutionException, InterruptedException, IOException {
         pollIntervalMs = Long.valueOf(System.getenv().getOrDefault("POLL_INTERVAL_MS", "100"));
         path = Paths.get(System.getenv().getOrDefault("FILE", "/tmp/consumer.out"));
         topicName = System.getenv().getOrDefault("TOPIC", "sample");
+
+        if(Files.exists(path)) {
+            Files.delete(path);
+        }
 
         KafkaUtils.createTopic(topicName);
 
