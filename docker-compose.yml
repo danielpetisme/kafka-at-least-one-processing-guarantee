@@ -1,0 +1,149 @@
+---
+version: '2'
+services:
+  zookeeper-1:
+    image: confluentinc/cp-zookeeper
+    hostname: zookeeper-1
+    container_name: zookeeper-1
+    environment:
+      ZOOKEEPER_SERVER_ID: "1"
+      ZOOKEEPER_CLIENT_PORT: "2181"
+      ZOOKEEPER_SERVERS: "zookeeper-1:2888:3888"
+      KAFKA_HEAP_OPTS: "-Xmx512M -Xms512M"
+
+  kafka-1:
+    image: confluentinc/cp-kafka:6.1.1
+    hostname: kafka-1
+    container_name: kafka-1
+    ports:
+      - 19092:19092
+    depends_on:
+      - zookeeper-1
+    environment:
+      KAFKA_BROKER_ID: "101"
+      KAFKA_LISTENERS: "INTERNAL://kafka-1:9092,EXTERNAL://:19092"
+      KAFKA_ADVERTISED_LISTENERS: "INTERNAL://kafka-1:9092,EXTERNAL://localhost:19092"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "INTERNAL"
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper-1:2181"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      # CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: "kafka-1:9092,kafka-2:9092,kafka-3:90922"
+      # CONFLUENT_METRICS_ENABLE: "true"
+      # CONFLUENT_SUPPORT_CUSTOMER_ID: "anonymous"
+      KAFKA_HEAP_OPTS: "-Xmx512M -Xms512M"
+
+  kafka-2:
+    image: confluentinc/cp-kafka:6.1.1
+    container_name: kafka-2
+    hostname: kafka-2
+    ports:
+      - 19093:19093
+    depends_on:
+      - zookeeper-1
+    environment:
+      KAFKA_BROKER_ID: "102"      
+      KAFKA_LISTENERS: "INTERNAL://kafka-2:9092,EXTERNAL://:19093"
+      KAFKA_ADVERTISED_LISTENERS: "INTERNAL://kafka-2:9092,EXTERNAL://localhost:19093"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "INTERNAL"
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper-1:2181"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      # CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: "kafka-1:9092,kafka-2:9092,kafka-3:90922"
+      # CONFLUENT_METRICS_ENABLE: "true"
+      # CONFLUENT_SUPPORT_CUSTOMER_ID: "anonymous"
+      KAFKA_HEAP_OPTS: "-Xmx512M -Xms512M"
+
+  kafka-3:
+    image: confluentinc/cp-kafka:6.1.1
+    hostname: kafka-3
+    container_name: kafka-3
+    ports:
+      - 19094:19094
+    depends_on:
+      - zookeeper-1
+    environment:
+      KAFKA_BROKER_ID: "103"
+      KAFKA_LISTENERS: "INTERNAL://kafka-3:9092,EXTERNAL://:19094"
+      KAFKA_ADVERTISED_LISTENERS: "INTERNAL://kafka-3:9092,EXTERNAL://localhost:19094"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "INTERNAL"
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper-1:2181"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      # CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: "kafka-1:9092,kafka-2:9092,kafka-3:90922"
+      # CONFLUENT_METRICS_ENABLE: "true"
+      # CONFLUENT_SUPPORT_CUSTOMER_ID: "anonymous"
+      KAFKA_HEAP_OPTS: "-Xmx512M -Xms512M"
+
+  # control-center:
+  #   image: confluentinc/cp-enterprise-control-center:6.1.1
+  #   hostname: control-center
+  #   container_name: control-center
+  #   depends_on:
+  #     - kafka-1
+  #     - kafka-2
+  #     - kafka-3
+  #     # - connect
+  #   ports:
+  #     - "9021:9021"
+  #   environment:
+  #     CONTROL_CENTER_BOOTSTRAP_SERVERS: "kafka-1:9092,kafka-2:9092,kafka-3:9092"
+  #     # CONTROL_CENTER_CONNECT_CLUSTER: 'connect:8083'
+  #     CONTROL_CENTER_REPLICATION_FACTOR: "3"
+  #     CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS: "3"
+  #     CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS: "3"
+  #     CONFLUENT_METRICS_TOPIC_REPLICATION: "3"
+  #     PORT: "9021"
+
+  producer:
+    image: confluentinc/cp-kafka:6.1.1
+    hostname: producer
+    container_name: producer
+    depends_on:
+      - kafka-1
+      - kafka-2
+      - kafka-3
+    environment:
+      TOPIC: "sample"
+      MESSAGE_BACKOFF: "1" #Seconds
+    command: # Build and bash infinite loop
+      - /bin/bash
+      - -c
+      - |
+          KAFKA_OPTS=""
+
+          until kafka-topics --bootstrap-server kafka-1:9092,kafka-2:9092,kafka-3:9092 --create --if-not-exists --partitions 1 --replication-factor 3 --topic $$TOPIC
+          do
+            echo Topic creation failed, retrying in 3 seconds...
+            sleep 3
+          done
+          
+          kafka-topics --bootstrap-server kafka-1:9092,kafka-2:9092,kafka-3:9092 --describe --topic $$TOPIC
+
+          i=1
+          while : 
+          do
+            echo "Sending key = $$i, value = Value $$i"
+            echo "$$i:Value $$i" | kafka-console-producer --broker-list kafka-1:9092,kafka-2:9092,kafka-3:9092 \
+              --property "key.separator=:" \
+              --property "parse.key=true" \
+              --property key.serializer=org.apache.kafka.common.serialization.StringSerializer \
+              --property value.serializer=org.apache.kafka.common.serialization.StringSerializer \
+              --topic $$TOPIC
+            sleep $$MESSAGE_BACKOFF
+            ((i++))
+          done
+
+  consumer-1:
+    build: ./consumer
+    hostname: consumer-1
+    container_name: consumer-1
+    depends_on:
+      - producer
+    environment:
+      JAVA_OPTS: "-Xmx256M -Xms256M"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka-1:9092, kafka-2:9092, kafka-3:9092"
+      KAFKA_AUTO_OFFSET_RESET: "earliest"
+      TOPIC: "sample"
+      FILE: "/tmp/sample/consumer-1.out"
+    volumes:
+      - ./:/tmp/sample
