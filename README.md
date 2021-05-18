@@ -12,6 +12,12 @@ Run the following command to startup the platform:
 docker compose up
 ```
 
+You can the start the consumer by running:
+```shell
+cd consumer
+./mvnw
+```
+
 # Destroy the environment
 
 Run the following command to stop and destroy the platform:
@@ -42,4 +48,4 @@ Let's say we want to be resilient to HTTP errors and introduce retries.
 
 Let's say we introduce a dead letter topic to route problematic records
 * Should the consumer considers the record as processed when the record has been moved to the dead letter topic
-* //INSERT the retries questions here
+* `//INSERT the retries questions here`
