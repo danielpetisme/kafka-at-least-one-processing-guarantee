@@ -49,3 +49,33 @@ Let's say we want to be resilient to HTTP errors and introduce retries.
 Let's say we introduce a dead letter topic to route problematic records
 * Should the consumer considers the record as processed when the record has been moved to the dead letter topic
 * `//INSERT the retries questions here`
+
+
+# Which questions should we be answering? 
+## Step1: How do we manage commits?
+Compare auto-commit vs manual commit
+
+Questions: 
+- When does the commit happen with auto-commit?
+- If you are doing manual commit, where should it be? Per batch, per record? Start of loop, end of loop?
+- Parameterless commit vs mapped commit?
+- Discuss use cases per test. 
+- You have the control of the commit. Test what happens when the consumer dies in different parts of the processing... Are there any duplicates (i.e, same event processed more than once)? Is there any data missing? 
+
+
+## Step2: How do we manage per message exceptions?
+We are processing orders, which come as JSON objects. Some bug is introduced in the producers, and sometimes they just sent a stack trace of an exception instead of JSON... 
+- Create a poison pill so the consumer raises an exception (hint: deserialize with KafkaJsonDeserializer and send something that is JSON) to force an infinite reprocessing
+- Skip the full failing batch
+- Skip just the poison pill, and identify it. 
+
+
+## Step3: How do we manage external failures?
+- Generate a target failure (http 500/JDBC exception)
+- The consumer should pause to retries the error
+- Resume once the message is considered as “processed”
+- Generate a rebalance
+- The shutdowned consumer should persist the progress in a 3rd party system
+- The starting consumer should get the the position from the 3rd party
+
+
