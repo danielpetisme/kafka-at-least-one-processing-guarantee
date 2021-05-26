@@ -65,6 +65,8 @@ public class SimpleConsumer {
                 logger.info("poll and process loop took {} ms", pollEnd - pollStart);
             }
         } finally {
+            // What can happen here?
+//            consumer.commitSync(Duration.ofMillis(100));
             consumer.close();
         }
     }
@@ -76,7 +78,42 @@ public class SimpleConsumer {
 //             processRemoteSystem(record, 5 * 1000);
 //             processRemoteSystemTimeout(record);
 //            processRemoteSystemException(record);
+
+//                    // Commit after a record
+//                    // After each record
+//                    // No offsets passed == commit the polled batch
+//                    // 1- Sync commit - Useless, commit each batch records.length() times, increase latency and broker workload
+//                    consumer.commitSync(Duration.ofMillis(100));
+//                    // 2- Async commit - Useless for the same reasons but since its async lower impact on latency/throughput
+//                    consumer.commitAsync((offsets, exception) -> {
+//                        logger.info("Committed offsets = {}, ex = {}", offsets.get(new TopicPartition(record.topic(), record.partition())).offset(), exception);
+//                    });
+//
+//                    // Offset passed Remember your need to commit offset +1
+//                    // 1- Sync commit
+//                    consumer.commitSync(Map.of(
+//                        new TopicPartition(record.topic(), record.partition()), new OffsetAndMetadata(record.offset()).
+//                    ), Duration.ofMillis(100));
+//                    // 2- Async commit
+//                    consumer.commitAsync(Map.of(
+//                        new TopicPartition(record.topic(), record.partition()), new OffsetAndMetadata(record.offset() + 1)
+//                    ), (offsets, exception) -> {
+//                        logger.info("Committed offsets = {}, exception = {}", offsets.get(new TopicPartition(record.topic(), record.partition())).offset() + 1, exception);
+//                    });
+
         }
+//                    // Commit after a batch processing
+//                    // Offset passed
+//                    // 1- Sync commit
+//                    consumer.commitSync(Map.of(
+//                        new TopicPartition(record.topic(), record.partition()), new OffsetAndMetadata(record.offset()).
+//                    ), Duration.ofMillis(100));
+//                    // 2- Async commit
+//                if (!records.isEmpty()) {
+//                    logger.info("Committing offsets = {}", offsetsToCommit);
+//                    consumer.commitAsync(offsetsToCommit, (offsets, exception) -> {
+//                        logger.info("Committed offsets = {}, exception = {}", offsets, exception);
+//                    });
     }
 
 
@@ -84,7 +121,6 @@ public class SimpleConsumer {
         List<String> lines = Collections.singletonList(record.value());
 
         try {
-<<<<<<< HEAD
             for(String l : lines) {
                 logger.info("processing line: {}, taking {} ms", l, timeout);
                 Files.write(path, Collections.singletonList(l), StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND);
@@ -120,11 +156,6 @@ public class SimpleConsumer {
             }
         } catch (Exception e) {
             throw new RuntimeException(e);
-=======
-            Files.write(path, lines, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND);
-        } catch (IOException e) {
-            e.printStackTrace();
->>>>>>> dirty commit
         }
     }
 
