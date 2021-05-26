@@ -1,12 +1,9 @@
 package com.sample;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -22,7 +19,8 @@ public class SimpleConsumer {
 
     private static final Logger logger = LoggerFactory.getLogger(SimpleConsumer.class);
 
-    final long pollIntervalMs;
+    final int pollIntervalMs;
+    final int pollRecords;
     final Path path;
     final String topicName;
     final KafkaConsumer<String, String> consumer;
@@ -34,7 +32,10 @@ public class SimpleConsumer {
     }
 
     public SimpleConsumer() throws ExecutionException, InterruptedException, IOException {
-        pollIntervalMs = Long.valueOf(System.getenv().getOrDefault("POLL_INTERVAL_MS", "100"));
+        // https://docs.confluent.io/platform/current/installation/configuration/consumer-configs.html#consumerconfigs_max.poll.interval.ms
+        pollIntervalMs = Integer.parseInt(System.getenv().getOrDefault("POLL_INTERVAL_MS", "100"));
+        pollRecords = Integer.parseInt(System.getenv().getOrDefault("POLL_RECORDS", "10"));
+
         path = Paths.get(System.getenv().getOrDefault("FILE", "/tmp/consumer.out"));
         topicName = System.getenv().getOrDefault("TOPIC", "sample");
 
@@ -45,6 +46,8 @@ public class SimpleConsumer {
         KafkaUtils.createTopic(topicName);
 
         Properties properties = KafkaUtils.consumerProperties();
+        properties.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, pollIntervalMs);
+        properties.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, pollRecords);
         logger.info("Creating consumer with props: {}", properties);
         consumer = new KafkaConsumer<>(properties);
         Runtime.getRuntime().addShutdownHook(new Thread(this::stop));
@@ -53,27 +56,68 @@ public class SimpleConsumer {
     private void start() {
         try {
             logger.info("Subscribing to {} topic", topicName);
-            consumer.subscribe(Collections.singletonList(topicName));
+            consumer.subscribe(Collections.singletonList(topicName), KafkaUtils.rebalanceListener);
 
             while (!stopping) {
-                ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
-
-                for (ConsumerRecord<String, String> record : records) {
-                    logger.info("Received record: Key = {}, Value = {}", record.key(), record.value());
-                    process(record);
-                }
-
+                long pollStart = System.currentTimeMillis();
+                pollAndProcess();
+                long pollEnd = System.currentTimeMillis();
+                logger.info("poll and process loop took {} ms", pollEnd - pollStart);
             }
         } finally {
             consumer.close();
         }
     }
 
-    public void process(ConsumerRecord<String, String> record) {
+    private void pollAndProcess() {
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
+        for (ConsumerRecord<String, String> record : records) {
+            logger.info("Received record: Key = {}, Value = {}", record.key(), record.value());
+            // processRemoteSystem(record);
+            // processRemoteSystemTimeout(record);
+            processRemoteSystemException(record);
+        }
+    }
+
+
+    public void processRemoteSystem(ConsumerRecord<String, String> record, long timeout) {
         List<String> lines = Collections.singletonList(record.value());
+
         try {
-            Files.write(path, lines, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND);
-        } catch (IOException e) {
+            for(String l : lines) {
+                logger.info("processing line: {}, taking {} ms", l, timeout);
+                Files.write(path, Collections.singletonList(l), StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND);
+                Thread.sleep(timeout);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void processRemoteSystemTimeout(ConsumerRecord<String, String> record) {
+        List<String> lines = Collections.singletonList(record.value());
+
+        try {
+            for(String l : lines) {
+                logger.info("processing line: {}, blocking endlessly", l);
+                Files.write(path, Collections.singletonList(l), StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND);
+                Thread.sleep(Long.MAX_VALUE);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void processRemoteSystemException(ConsumerRecord<String, String> record) {
+        List<String> lines = Collections.singletonList(record.value());
+
+        try {
+            for(String l : lines) {
+                logger.info("processing line: {}, failing", l);
+                Files.write(path, Collections.singletonList(l), StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND);
+                throw new RuntimeException("remote system kaboom!");
+            }
+        } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }

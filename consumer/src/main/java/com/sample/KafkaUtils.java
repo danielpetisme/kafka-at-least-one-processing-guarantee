@@ -5,13 +5,13 @@ import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
@@ -32,7 +32,7 @@ public final class KafkaUtils {
         ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
         ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
 
-    public static final Properties consumerProperties() {
+    public static Properties consumerProperties() {
         return consumerProperties(DEFAULT_CONFIG, System.getenv(), DEFAULT_KAFKA_ENV_PREFIX);
     }
 
@@ -76,4 +76,28 @@ public final class KafkaUtils {
         }
 
     }
+
+    public static final ConsumerRebalanceListener rebalanceListener = new ConsumerRebalanceListener() {
+        @Override
+        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            System.out.printf("onPartitionsRevoked - %s%n", formatPartitions(partitions));
+        }
+
+        @Override
+        public void onPartitionsLost(Collection<TopicPartition> partitions) {
+            System.out.printf("onPartitionsLost - %s%n", formatPartitions(partitions));
+        }
+
+        @Override
+        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+            System.out.printf("onPartitionsAssigned - %s%n", formatPartitions(partitions));
+        }
+    };
+
+    private static List<String> formatPartitions(Collection<TopicPartition> partitions) {
+        return partitions.stream().map(topicPartition ->
+            String.format("topic: %s, partition: %s", topicPartition.topic(), topicPartition.partition()))
+            .collect(Collectors.toList());
+    }
+
 }
