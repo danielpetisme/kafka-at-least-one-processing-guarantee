@@ -133,17 +133,17 @@ services:
             ((i++))
           done
 
-  consumer-1:
-    build: ./consumer
-    hostname: consumer-1
-    container_name: consumer-1
-    depends_on:
-      - producer
-    environment:
-      JAVA_OPTS: "-Xmx256M -Xms256M"
-      KAFKA_BOOTSTRAP_SERVERS: "kafka-1:9092, kafka-2:9092, kafka-3:9092"
-      KAFKA_AUTO_OFFSET_RESET: "earliest"
-      TOPIC: "sample"
-      FILE: "/tmp/sample/consumer-1.out"
-    volumes:
-      - ./:/tmp/sample
+  # consumer-1:
+  #   build: ./consumer
+  #   hostname: consumer-1
+  #   container_name: consumer-1
+  #   depends_on:
+  #     - producer
+  #   environment:
+  #     JAVA_OPTS: "-Xmx256M -Xms256M"
+  #     KAFKA_BOOTSTRAP_SERVERS: "kafka-1:9092, kafka-2:9092, kafka-3:9092"
+  #     KAFKA_AUTO_OFFSET_RESET: "earliest"
+  #     TOPIC: "sample"
+  #     FILE: "/tmp/sample/consumer-1.out"
+  #   volumes:
+  #     - ./:/tmp/sample

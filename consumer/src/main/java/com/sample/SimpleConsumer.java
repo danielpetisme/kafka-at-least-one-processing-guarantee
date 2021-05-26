@@ -39,7 +39,7 @@ public class SimpleConsumer {
         path = Paths.get(System.getenv().getOrDefault("FILE", "/tmp/consumer.out"));
         topicName = System.getenv().getOrDefault("TOPIC", "sample");
 
-        if(Files.exists(path)) {
+        if (Files.exists(path)) {
             Files.delete(path);
         }
 
@@ -84,6 +84,7 @@ public class SimpleConsumer {
         List<String> lines = Collections.singletonList(record.value());
 
         try {
+<<<<<<< HEAD
             for(String l : lines) {
                 logger.info("processing line: {}, taking {} ms", l, timeout);
                 Files.write(path, Collections.singletonList(l), StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND);
@@ -119,6 +120,11 @@ public class SimpleConsumer {
             }
         } catch (Exception e) {
             throw new RuntimeException(e);
+=======
+            Files.write(path, lines, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            e.printStackTrace();
+>>>>>>> dirty commit
         }
     }
 
@@ -126,4 +132,5 @@ public class SimpleConsumer {
         logger.info("Stopping the consumer");
         stopping = true;
     }
+
 }
