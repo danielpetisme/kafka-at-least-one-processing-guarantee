@@ -81,39 +81,28 @@ public class SimpleConsumer {
 
 //                    // Commit after a record
 //                    // After each record
-//                    // No offsets passed == commit the polled batch
-//                    // 1- Sync commit - Useless, commit each batch records.length() times, increase latency and broker workload
+//                    // No offsets passed
+//                    // 1- Sync commit
 //                    consumer.commitSync(Duration.ofMillis(100));
-//                    // 2- Async commit - Useless for the same reasons but since its async lower impact on latency/throughput
+//                    // 2- Async commit
 //                    consumer.commitAsync((offsets, exception) -> {
-//                        logger.info("Committed offsets = {}, ex = {}", offsets.get(new TopicPartition(record.topic(), record.partition())).offset(), exception);
+//                        logger.info("Committed offsets = {}, ex = {}", offsets, exception);
 //                    });
 //
-//                    // Offset passed Remember your need to commit offset +1
+//                    // Offset passed, remember how Kafka is persisting offset progression :-)
 //                    // 1- Sync commit
 //                    consumer.commitSync(Map.of(
-//                        new TopicPartition(record.topic(), record.partition()), new OffsetAndMetadata(record.offset()).
+//                        new TopicPartition(record.topic(), record.partition()), new OffsetAndMetadata().
 //                    ), Duration.ofMillis(100));
 //                    // 2- Async commit
 //                    consumer.commitAsync(Map.of(
-//                        new TopicPartition(record.topic(), record.partition()), new OffsetAndMetadata(record.offset() + 1)
+//                        new TopicPartition(record.topic(), record.partition()), new OffsetAndMetadata()
 //                    ), (offsets, exception) -> {
-//                        logger.info("Committed offsets = {}, exception = {}", offsets.get(new TopicPartition(record.topic(), record.partition())).offset() + 1, exception);
+//                        logger.info("Committed offsets = {}, exception = {}", offsets, exception);
 //                    });
 
         }
-//                    // Commit after a batch processing
-//                    // Offset passed
-//                    // 1- Sync commit
-//                    consumer.commitSync(Map.of(
-//                        new TopicPartition(record.topic(), record.partition()), new OffsetAndMetadata(record.offset()).
-//                    ), Duration.ofMillis(100));
-//                    // 2- Async commit
-//                if (!records.isEmpty()) {
-//                    logger.info("Committing offsets = {}", offsetsToCommit);
-//                    consumer.commitAsync(offsetsToCommit, (offsets, exception) -> {
-//                        logger.info("Committed offsets = {}, exception = {}", offsets, exception);
-//                    });
+//                    // Commit after a batch processing         
     }
 
 
