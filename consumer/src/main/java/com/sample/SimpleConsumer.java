@@ -73,9 +73,9 @@ public class SimpleConsumer {
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
         for (ConsumerRecord<String, String> record : records) {
             logger.info("Received record: Key = {}, Value = {}", record.key(), record.value());
-            // processRemoteSystem(record);
-            // processRemoteSystemTimeout(record);
-            processRemoteSystemException(record);
+//             processRemoteSystem(record, 5 * 1000);
+//             processRemoteSystemTimeout(record);
+//            processRemoteSystemException(record);
         }
     }
 
