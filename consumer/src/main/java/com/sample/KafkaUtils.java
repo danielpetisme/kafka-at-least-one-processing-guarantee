@@ -4,10 +4,8 @@ import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.serialization.StringDeserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,18 +24,12 @@ public final class KafkaUtils {
     public static final String DEFAULT_NUMBER_OF_PARTITIONS = "1";
     public static final String DEFAULT_REPLICATION_FACTOR = "3";
 
-    private static final Map<String, String> DEFAULT_CONFIG = Map.of(
-        ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:19092,localhost:19093,localhost:19094",
-        ConsumerConfig.GROUP_ID_CONFIG, "simple-consumer",
-        ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
-        ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-
-    public static Properties consumerProperties() {
-        return consumerProperties(DEFAULT_CONFIG, System.getenv(), DEFAULT_KAFKA_ENV_PREFIX);
+    public static Map<String, String> systemProperties() {
+        return systemProperties(System.getenv(), DEFAULT_KAFKA_ENV_PREFIX);
     }
 
-    private static Properties consumerProperties(Map<String, String> baseProps, Map<String, String> envProps, String prefix) {
-        Map<String, String> systemProperties = envProps.entrySet()
+    public static Map<String, String> systemProperties(Map<String, String> envProps, String prefix) {
+        return envProps.entrySet()
             .stream()
             .filter(e -> e.getKey().startsWith(prefix))
             .collect(Collectors.toMap(
@@ -47,17 +39,12 @@ public final class KafkaUtils {
                     .replace("_", ".")
                 , e -> e.getValue())
             );
-
-        Properties props = new Properties();
-        props.putAll(baseProps);
-        props.putAll(systemProperties);
-        return props;
     }
 
-    public static void createTopic(String topicName) throws ExecutionException, InterruptedException {
-        Properties properties = consumerProperties();
-        final Integer numberOfPartitions =  Integer.valueOf(System.getenv().getOrDefault(NUMBER_OF_PARTITIONS, DEFAULT_NUMBER_OF_PARTITIONS));
-        final Short replicationFactor =  Short.valueOf(System.getenv().getOrDefault(REPLICATION_FACTOR, DEFAULT_REPLICATION_FACTOR));
+
+    public static void createTopic(Properties properties, String topicName) throws ExecutionException, InterruptedException {
+        final Integer numberOfPartitions = Integer.valueOf(System.getenv().getOrDefault(NUMBER_OF_PARTITIONS, DEFAULT_NUMBER_OF_PARTITIONS));
+        final Short replicationFactor = Short.valueOf(System.getenv().getOrDefault(REPLICATION_FACTOR, DEFAULT_REPLICATION_FACTOR));
 
         AdminClient adminClient = KafkaAdminClient.create(properties);
         createTopic(adminClient, topicName, numberOfPartitions, replicationFactor);

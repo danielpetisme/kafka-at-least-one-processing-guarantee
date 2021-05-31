@@ -1,6 +1,11 @@
 package com.sample;
 
-import org.apache.kafka.clients.consumer.*;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -12,6 +17,7 @@ import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
@@ -19,8 +25,17 @@ public class SimpleConsumer {
 
     private static final Logger logger = LoggerFactory.getLogger(SimpleConsumer.class);
 
-    final int pollIntervalMs;
-    final int pollRecords;
+    public static final int ONE_MB = 1024 * 1024;
+    public static final int ONE_SECOND = 1000;
+    public static final int POLL_TIMEOUT_SECONDS = 15;
+
+    private static final Map<String, String> DEFAULT_CONFIG = Map.of(
+        ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:19092,localhost:19093,localhost:19094",
+        ConsumerConfig.GROUP_ID_CONFIG, "simple-consumer",
+        ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+        ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()
+    );
+
     final Path path;
     final String topicName;
     final KafkaConsumer<String, String> consumer;
@@ -32,22 +47,20 @@ public class SimpleConsumer {
     }
 
     public SimpleConsumer() throws ExecutionException, InterruptedException, IOException {
-        // https://docs.confluent.io/platform/current/installation/configuration/consumer-configs.html#consumerconfigs_max.poll.interval.ms
-        pollIntervalMs = Integer.parseInt(System.getenv().getOrDefault("POLL_INTERVAL_MS", "100"));
-        pollRecords = Integer.parseInt(System.getenv().getOrDefault("POLL_RECORDS", "10"));
-
         path = Paths.get(System.getenv().getOrDefault("FILE", "/tmp/consumer.out"));
         topicName = System.getenv().getOrDefault("TOPIC", "sample");
 
-        if (Files.exists(path)) {
-            Files.delete(path);
-        }
+        Properties properties = new Properties();
+        properties.putAll(DEFAULT_CONFIG);
+        properties.putAll(KafkaUtils.systemProperties());
+        //for test purpose we increase the below limits to create a batch of records
+        properties.put(ConsumerConfig.FETCH_MIN_BYTES_CONFIG, 1 * ONE_MB); //default 1B
+        properties.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, 10 * ONE_SECOND); //default 500ms
+        // for test purpose we lower the limit to generate consumer group timeouts
+        properties.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 20 * ONE_SECOND); //default 5m
 
-        KafkaUtils.createTopic(topicName);
+        KafkaUtils.createTopic(properties, topicName);
 
-        Properties properties = KafkaUtils.consumerProperties();
-        properties.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, pollIntervalMs);
-        properties.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, pollRecords);
         logger.info("Creating consumer with props: {}", properties);
         consumer = new KafkaConsumer<>(properties);
         Runtime.getRuntime().addShutdownHook(new Thread(this::stop));
@@ -59,23 +72,26 @@ public class SimpleConsumer {
             consumer.subscribe(Collections.singletonList(topicName), KafkaUtils.rebalanceListener);
 
             while (!stopping) {
-                long pollStart = System.currentTimeMillis();
                 pollAndProcess();
-                long pollEnd = System.currentTimeMillis();
-                logger.info("poll and process loop took {} ms", pollEnd - pollStart);
             }
         } finally {
             // What can happen here?
-//            consumer.commitSync(Duration.ofMillis(100));
+//            consumer.commitSync();
             consumer.close();
         }
     }
 
     private void pollAndProcess() {
-        ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
+        long pollStart = System.currentTimeMillis();
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(POLL_TIMEOUT_SECONDS));
+        if (records.isEmpty()) {
+            return;
+        }
+        logger.info("Received {} records starting at offset: {}", records.count(), consumer.position(new TopicPartition(topicName, 0)));
+
         for (ConsumerRecord<String, String> record : records) {
             logger.info("Received record: Key = {}, Value = {}", record.key(), record.value());
-//             processRemoteSystem(record, 5 * 1000);
+            processRemoteSystem(record, 5 * 1000);
 //             processRemoteSystemTimeout(record);
 //            processRemoteSystemException(record);
 
@@ -83,7 +99,7 @@ public class SimpleConsumer {
 //                    // After each record
 //                    // No offsets passed
 //                    // 1- Sync commit
-//                    consumer.commitSync(Duration.ofMillis(100));
+//                    consumer.commitSync();
 //                    // 2- Async commit
 //                    consumer.commitAsync((offsets, exception) -> {
 //                        logger.info("Committed offsets = {}, ex = {}", offsets, exception);
@@ -102,7 +118,10 @@ public class SimpleConsumer {
 //                    });
 
         }
-//                    // Commit after a batch processing         
+//                    // Commit after a batch processing
+        long pollEnd = System.currentTimeMillis();
+        logger.info("Polled and processed {} records in {} ms", records.count(), pollEnd - pollStart);
+
     }
 
 
@@ -110,8 +129,8 @@ public class SimpleConsumer {
         List<String> lines = Collections.singletonList(record.value());
 
         try {
-            for(String l : lines) {
-                logger.info("processing line: {}, taking {} ms", l, timeout);
+            for (String l : lines) {
+                logger.info("Processing line: {}, taking {} ms", l, timeout);
                 Files.write(path, Collections.singletonList(l), StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND);
                 Thread.sleep(timeout);
             }
@@ -124,7 +143,7 @@ public class SimpleConsumer {
         List<String> lines = Collections.singletonList(record.value());
 
         try {
-            for(String l : lines) {
+            for (String l : lines) {
                 logger.info("processing line: {}, blocking endlessly", l);
                 Files.write(path, Collections.singletonList(l), StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND);
                 Thread.sleep(Long.MAX_VALUE);
@@ -138,7 +157,7 @@ public class SimpleConsumer {
         List<String> lines = Collections.singletonList(record.value());
 
         try {
-            for(String l : lines) {
+            for (String l : lines) {
                 logger.info("processing line: {}, failing", l);
                 Files.write(path, Collections.singletonList(l), StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND);
                 throw new RuntimeException("remote system kaboom!");
